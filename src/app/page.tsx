@@ -1,7 +1,9 @@
+// src/app/page.tsx
 "use client";
 
-import { useState } from 'react';
-import type { GeneratePuzzleOutput } from '@/ai/flows/generate-puzzle';
+import { useState, useCallback } from 'react';
+import type { GeneratePuzzleOutput, GeneratePuzzleInput } from '@/ai/flows/generate-puzzle';
+import { handleGeneratePuzzleAction } from '@/lib/actions'; // Direct import for regeneration
 import PuzzleGeneratorForm from '@/components/puzzle-generator-form';
 import PuzzleDisplay from '@/components/puzzle-display';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -11,50 +13,100 @@ export default function HomePage() {
   const [puzzleData, setPuzzleData] = useState<GeneratePuzzleOutput | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentPuzzleParams, setCurrentPuzzleParams] = useState<{ puzzleType: string; difficulty: string } | null>(null);
+  
+  // Stores the parameters of the *last successfully generated* puzzle for regeneration
+  const [currentPuzzleParams, setCurrentPuzzleParams] = useState<GeneratePuzzleInput | null>(null);
 
-  const handleNewPuzzleRequest = (params: { puzzleType: string; difficulty: string }) => {
-    setCurrentPuzzleParams(params);
+  const handleNewPuzzleGenerated = (data: GeneratePuzzleOutput, params: GeneratePuzzleInput) => {
+    setPuzzleData(data);
+    setCurrentPuzzleParams(params); // Save params of this new puzzle
+    setError(null);
+    setIsLoading(false);
   };
 
+  const handleGenerationError = (errorMessage: string) => {
+    setError(errorMessage);
+    setPuzzleData(null); // Clear any old puzzle on error
+    setIsLoading(false);
+  };
+  
+  const triggerPuzzleGeneration = useCallback(async (params: GeneratePuzzleInput) => {
+    setIsLoading(true);
+    setError(null);
+    setPuzzleData(null); // Clear previous puzzle while new one generates
+
+    try {
+      const result = await handleGeneratePuzzleAction(params);
+      if ("error" in result) {
+        handleGenerationError(result.error);
+      } else {
+        handleNewPuzzleGenerated(result, params);
+      }
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : "An unexpected error occurred.";
+      handleGenerationError(errorMessage);
+    }
+  }, []);
+
+
+  const handleRegeneratePuzzle = useCallback(() => {
+    if (currentPuzzleParams) {
+      // Trigger generation with the same parameters as the last successful puzzle
+      triggerPuzzleGeneration(currentPuzzleParams);
+    } else {
+      // Fallback: if no params, maybe show error or prompt user to generate one first
+      setError("No previous puzzle parameters to regenerate. Please generate a puzzle first.");
+    }
+  }, [currentPuzzleParams, triggerPuzzleGeneration]);
+
+
   return (
-    <div className="container mx-auto p-4 py-6 md:p-8 flex flex-col items-center">
-      <div className="w-full max-w-2xl space-y-8">
+    <div className="container mx-auto px-4 py-8 md:px-6 md:py-12 flex flex-col items-center min-h-screen">
+      <header className="mb-10 text-center">
+        <h1 className="text-5xl font-extrabold tracking-tight text-primary sm:text-6xl lg:text-7xl">
+          PuzzlePal
+        </h1>
+        <p className="mt-4 text-xl text-muted-foreground sm:text-2xl">
+          Your AI-powered companion for brain-teasing fun!
+        </p>
+      </header>
+
+      <div className="w-full max-w-3xl space-y-10">
         <PuzzleGeneratorForm
-          onPuzzleGenerated={(data, params) => {
-            setPuzzleData(data);
-            handleNewPuzzleRequest(params);
-          }}
-          setIsLoading={setIsLoading}
-          setError={setError}
-          currentParams={currentPuzzleParams}
+          onPuzzleRequest={triggerPuzzleGeneration} // Pass the direct generation trigger
+          setIsLoading={setIsLoading} // Still needed for form's own submit button's loading state
+          initialDifficulty="Medium" // Default difficulty for the form
         />
+        
         {isLoading && (
-          <div className="flex flex-col justify-center items-center p-8 space-y-4 rounded-lg bg-card shadow-md">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-lg text-muted-foreground">Generating your puzzle... please wait.</p>
+          <div className="flex flex-col justify-center items-center p-10 space-y-6 rounded-xl bg-card shadow-xl border border-border/60">
+            <Loader2 className="h-16 w-16 animate-spin text-primary" />
+            <p className="text-2xl text-muted-foreground font-medium">Crafting your challenge...</p>
+            <p className="text-base text-muted-foreground/80">Please wait a moment.</p>
           </div>
         )}
+
         {error && !isLoading && (
-          <Alert variant="destructive" className="mt-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error Generating Puzzle</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+          <Alert variant="destructive" className="mt-6 p-5 rounded-xl shadow-lg">
+            <AlertCircle className="h-6 w-6" />
+            <AlertTitle className="text-xl font-semibold">Oops! Puzzle Predicament</AlertTitle>
+            <AlertDescription className="text-base mt-1">{error}</AlertDescription>
           </Alert>
         )}
+
         {puzzleData && !isLoading && !error && (
-          <PuzzleDisplay
-            puzzleData={puzzleData}
-            onRegenerate={() => {
-              if (currentPuzzleParams) {
-                // This will trigger a new generation via PuzzleGeneratorForm's useEffect
-                 setCurrentPuzzleParams({...currentPuzzleParams}); 
-                 setPuzzleData(null); // Clear old puzzle while new one generates
-              }
-            }}
-          />
+          <div className="mt-6">
+            <PuzzleDisplay
+              puzzleData={puzzleData}
+              onRegenerate={handleRegeneratePuzzle}
+            />
+          </div>
         )}
       </div>
+      <footer className="mt-16 text-center text-muted-foreground text-sm">
+        <p>&copy; {new Date().getFullYear()} PuzzlePal. All puzzles generated by AI.</p>
+        <p>Refresh your mind, one puzzle at a time.</p>
+      </footer>
     </div>
   );
 }

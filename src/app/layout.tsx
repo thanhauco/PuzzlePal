@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'PuzzlePal',
-  description: 'Generate and solve brain teaser puzzles with PuzzlePal!',
+  title: 'PuzzlePal - AI Powered Brain Teasers',
+  description: 'Generate, solve, and check answers for unique brain teaser puzzles with PuzzlePal, your AI puzzle companion!',
 };
 
 export default function RootLayout({
@@ -25,10 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}>
+    <html lang="en" className="h-full">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen bg-background`}>
         <SiteHeader />
-        <main className="flex-grow">
+        <main className="flex-grow flex flex-col">
           {children}
         </main>
         <Toaster />
